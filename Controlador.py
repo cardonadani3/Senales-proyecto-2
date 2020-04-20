@@ -29,9 +29,17 @@ class Coordinador(object):
     def __init__(self,vista,biosenal):
         self.__mi_vista=vista
         self.__mi_biosenal=biosenal
- 
-    def analizar_multitaper(self, senal,fs,fpassi,fpassf,W,T,p):
-        Pxx,f=self.__mi_biosenal.analizar_multitaper(senal,fs,fpassi,fpassf,W,T,p)
+    def cargar_archivo(self,archivo_cargado):
+        data,dimension=self.__mi_biosenal.cargar_archivo(archivo_cargado)
+        return(data,dimension)
+    def recibirDatosSenal(self,data):
+        self.__mi_biosenal.asignarDatos(data)
+    def devolverDatosSenal(self,x_min,x_max):
+        return self.__mi_biosenal.devolver_segmento(x_min,x_max)
+    def devolverCanal(self,spinValue,x_min,x_max):
+        return self.__mi_biosenal.devolver_canal(spinValue,x_min,x_max) 
+    def analizar_multitaper(self, senal,fs,fpassi,fpassf,W,T,p,seg):
+        Pxx,f=self.__mi_biosenal.analizar_multitaper(senal,fs,fpassi,fpassf,W,T,p,seg)
         return(Pxx,f)
     def transf_wevelet(self,senal1,fs,fpassi,fpassf,nescalas):
         time,freqs,power=self.__mi_biosenal.transf_wevelet(senal1,fs,fpassi,fpassf,nescalas)

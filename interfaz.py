@@ -8,14 +8,14 @@ from PyQt5.QtGui import QIntValidator
 from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 import os 
-
+import scipy.io as sio
 from PyQt5.uic import loadUi
 
 from numpy import arange, sin, pi
 #contenido para graficos de matplotlib
 from matplotlib.backends. backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 
-import scipy.io as sio
+
 import numpy as np
 from Modelo import Biosenal
 from csv import reader as reader_csv;
@@ -90,7 +90,7 @@ class InterfazGrafico(QMainWindow):
         #siempre va el constructor
         super(InterfazGrafico,self).__init__()
         #se carga el diseno creado en qt
-        loadUi ('anadir_grafico - copia.ui',self)
+        loadUi ('anadir_grafico_daniela.ui',self)
         #loadUi ('anadir_graf.ui',self)
         
         #se llama la rutina donde configuramos la interfaz
@@ -121,6 +121,7 @@ class InterfazGrafico(QMainWindow):
     
         #se organizan los botones que van conectados a los diferentes funciones
         self.boton_cargar.clicked.connect(self.cargar_senal)
+        self.spin_canal.valueChanged.connect(self.spin_changed)
         self.boton_analizar.clicked.connect(self.analizar)
         self.boton_welch.clicked.connect(self.analisis_welch)      
         self.boton_multitaper.clicked.connect(self.analisis_multitaper) 
@@ -142,7 +143,7 @@ class InterfazGrafico(QMainWindow):
         self.boton_welch.setEnabled(False)
         self.boton_multitaper.setEnabled(False) 
         self.boton_wavelet.setEnabled(False)  
-        
+        self.boton_segundos.setEnabled(False) 
                      
         
         #cuando cargue la senal debo volver a habilitarlos
@@ -155,24 +156,53 @@ class InterfazGrafico(QMainWindow):
         #se abre el cuadro de dialogo para cargar
         #* son archivos .mat
         archivo_cargado, _ = QFileDialog.getOpenFileName(self, "Abrir señal","","Todos los archivos (*);;Archivos mat (*.mat)*;;Text files (.txt)*")
-        if archivo_cargado != "":
-            print(archivo_cargado)
-            mate =(str(archivo_cargado)).find(".mat")
-            openbci =(str(archivo_cargado)).find(".txt")
-            #Se utiliza este condicional para garantizar que se carguen dos tipos 
-            #senales, tanto en openbci como en .mat
-            if mate == -1 and openbci == -1:
-                print('cargue un archivo compatible')
-            elif mate != -1:
-                data = sio.loadmat(archivo_cargado)
-                self.data = np.squeeze(data["data"])
-                x=np.arange(len(self.data+1))
-                self.__sc.graficar_gatos(x,self.data,'Muestras','Voltaje')
-                
+        data,dimension=self.__coordinador.cargar_archivo(archivo_cargado)
+        
+        if dimension == 3:
+            sensores,puntos,ensayos=data.shape
+            self.data=np.reshape(data,(sensores,puntos*ensayos),order="F")
+            #el coordinador recibe y guarda la senal en su propio .py, por eso no 
+            #necesito una variable que lo guarde en el .py interfaz
+            self.__coordinador.recibirDatosSenal(self.data)
+            self.__x_min=0
+            self.__x_max=2000
+            x=np.arange(self.__x_max)
+            self.data=(self.__coordinador.devolverDatosSenal(self.__x_min,self.__x_max))
+            self.spin_canal.setEnabled(True)
+            
+        elif dimension == 2:
+            self.data = np.squeeze(data)                    
+            x=np.arange(len(self.data+1)) 
+            self.spin_canal.setEnabled(False)
+
+        self.__sc.graficar_gatos(x,self.data,'Muestras','Voltaje') 
         self.boton_welch.setEnabled(True)
         self.boton_multitaper.setEnabled(True) 
-        self.boton_wavelet.setEnabled(True)                                         
+        self.boton_wavelet.setEnabled(True)   
 
+                                      
+            #Este metodo permite controlar los canales, dependiendo del valor del 
+            #spin_box podra cambiar el canal y el plot
+    def spin_changed(self):
+        try:       
+            spinValue = self.spin_canal.value()
+            self.__x_min=0
+            self.__x_max=2000
+            self.spin_canal.setMinimum(0)
+            #Esta linea permite condicionar el valor maximo que puede adoptar el spinbox 
+            #dependiendo de la senal que se cargue. Siempre va a variar en funcion
+            #de la cantidad de canales en la senal 
+            self.spin_canal.setMaximum((self.__coordinador.devolverDatosSenal(self.__x_min,self.__x_max)).shape[0])
+            self.data=self.__coordinador.devolverCanal(spinValue,self.__x_min,self.__x_max)
+            self.__sc.graficar_gatos(np.arange(self.__x_max),self.data,'Muestras','Voltaje')
+            
+        except IndexError:      
+            advertencia=QMessageBox()
+            advertencia.setWindowTitle('Error')
+            advertencia.setText('La senal no tiene mas canales para mostrar')
+            advertencia.exec_()
+         
+        
         
     def analisis_welch(self):#Inhabilita los botones que no son necesarios para el analisis de welch
         self.boton_tiempo_inicial.setEnabled(True)        
@@ -186,6 +216,7 @@ class InterfazGrafico(QMainWindow):
         self.boton_noverlap.setEnabled(True)                  
         self.boton_ventana.setEnabled(True)
         self.boton_nescalas.setEnabled(False)
+        self.boton_segundos.setEnabled(False)
         self.analisis=1
       
 
@@ -201,6 +232,7 @@ class InterfazGrafico(QMainWindow):
         self.boton_noverlap.setEnabled(False)             
         self.boton_ventana.setEnabled(False) 
         self.boton_nescalas.setEnabled(False)
+        self.boton_segundos.setEnabled(True) 
         self.analisis=2 
 
         
@@ -216,6 +248,7 @@ class InterfazGrafico(QMainWindow):
         self.boton_noverlap.setEnabled(False)             
         self.boton_ventana.setEnabled(False) 
         self.boton_nescalas.setEnabled(True)
+        self.boton_segundos.setEnabled(False)
         self.analisis=3           
             
     def analizar(self):        
@@ -234,7 +267,7 @@ class InterfazGrafico(QMainWindow):
                 
         
             elif self.analisis==2: #llama la funcion que hace el analisis multitaper
-                Pxx,f=self.__coordinador.analizar_multitaper(self.data,self.fs,float(self.boton_fpassi.text()),float(self.boton_fpassf.text()),float(self.boton_w.text()),int(self.boton_nperseg.text()),float(self.boton_p.text()));
+                Pxx,f=self.__coordinador.analizar_multitaper(self.data,self.fs,float(self.boton_fpassi.text()),float(self.boton_fpassf.text()),float(self.boton_w.text()),int(self.boton_nperseg.text()),float(self.boton_p.text()),self.boton_segundos.text());
                 self.__mc.graficar_gatos(f[(f >= self.desde) & (f <= self.hasta)],Pxx[(f >= self.desde) & (f <= self.hasta)],'Frecuencia','Potencia')
                 
             elif self.analisis==3:#llama la funcion que hace el analisis de wavelet continua
@@ -245,7 +278,7 @@ class InterfazGrafico(QMainWindow):
         except ValueError:      
             advertencia=QMessageBox()
             advertencia.setWindowTitle('Error')
-            advertencia.setText('Recuerde llenar todos los espacios.\n SOLAMENTE valores numericos')
+            advertencia.setText('Asegurese de ingresar todos los datos correctamente')
             advertencia.exec_()
   
                 

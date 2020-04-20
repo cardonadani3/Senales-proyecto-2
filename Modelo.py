@@ -17,14 +17,54 @@ class Biosenal(object):
             self.__puntos=0
         self.__inicio = 0
         self.__final = 0
-   
+    def asignarDatos(self,data):
+        self.__data=data
+        self.__canales=data.shape[0]
+        self.__puntos=data.shape[1]
+    #necesitamos hacer operacioes basicas sobre las senal, ampliarla, disminuirla, trasladarla temporalmente etc
+    
+    def cargar_archivo(self,archivo_cargado):
+        import scipy.io as sio
+        if archivo_cargado != "":
+            print(archivo_cargado)
+            mate =(str(archivo_cargado)).find(".mat")
+            #Se utiliza este condicional para garantizar que se carguen dos tipos 
+            #senales, tanto en openbci como en .mat
+            if mate == -1:
+                print('cargue un archivo compatible')
+            elif mate != -1:
+                data = sio.loadmat(archivo_cargado)
+                keys = np.array(list(data.keys()))
+                data = data[str(keys[3])]              
+                dimension=len(data.shape)        
+                    
+        return(data,dimension)
         
-    def analizar_multitaper(self, senal1,fs,fpassi,fpassf,W,T,p):#analisis usando multitaper scipy 1.1.0
+    def devolver_segmento(self,x_min,x_max):
+       
+        #prevengo errores logicos
+        if x_min>=x_max:
+            return None
+        #cojo los valores que necesito en la biosenal
+        return self.__data[:,x_min:x_max]
+    
+    def devolver_canal (self,spinValue,x_min,x_max):
+        if x_min>=x_max:
+            return None
+        return self.__data[spinValue,x_min:x_max]
+       
+        
+    def analizar_multitaper(self, senal1,fs,fpassi,fpassf,W,T,p,seg):#analisis usando multitaper scipy 1.1.0
         
         from chronux.mtspectrumc import mtspectrumc        
+        seg=int(seg)
+        prim=fs*seg
+        org=senal1.shape[0]
+        sec=org/prim
+        print(sec)
         params = dict(fs = fs, fpass = [fpassi, fpassf], tapers = [W, T, p], trialave = 1)
         
-        data = np.reshape(senal1,(fs*5,10),order='F')        
+        data = np.reshape(senal1,(int(prim),int(sec)),order='F')        
         #Calculate the spectral power of the data
         self.Pxx, self.f = mtspectrumc(data, params)        
         return(self.Pxx, self.f)
